@@ -1,3 +1,4 @@
+import torch
 from pdb import set_trace as T
 
 import numpy as np
@@ -475,7 +476,7 @@ def _seed_and_reset(env, seed):
 
 class GymnaxPufferEnv(pufferlib.PufferEnv):
     def __init__(self, env, env_params, num_envs=1, buf=None):
-        from gymnax.spaces import gymnax_space_to_gym_space
+        from gymnax.environments.spaces import gymnax_space_to_gym_space
 
         gymnax_obs_space = env.observation_space(env_params)
         self.single_observation_space = gymnax_space_to_gym_space(gymnax_obs_space)
@@ -494,13 +495,13 @@ class GymnaxPufferEnv(pufferlib.PufferEnv):
         self.step_fn = jax.jit(jax.vmap(env.step, in_axes=(0, 0, 0, None)))
         self.rng = jax.random.PRNGKey(0)
 
-    def reset(self, rng, params=None):
+    def reset(self, seed=None, rng=None, params=None):
         import jax
         self.rng, _rng = jax.random.split(self.rng)
         self.rngs = jax.random.split(_rng, self.num_agents)
         obs, self.state = self.reset_fn(self.rngs, params)
         from torch.utils import dlpack as torch_dlpack
-        self.observations = torch_dlpack.from_dlpack(jax.dlpack.to_dlpack(obs))
+        self.observations = torch.from_dlpack(obs)
         return self.observations, []
 
     def step(self, action):
@@ -511,7 +512,7 @@ class GymnaxPufferEnv(pufferlib.PufferEnv):
 
         # Convert JAX array to DLPack, then to PyTorch tensor
         from torch.utils import dlpack as torch_dlpack
-        self.observations = torch_dlpack.from_dlpack(jax.dlpack.to_dlpack(obs))
+        self.observations = torch.from_dlpack(obs)
         self.rewards = np.asarray(reward)
         self.terminals = np.asarray(done)
         infos = [{k: v.mean().item() for k, v in info.items()}]

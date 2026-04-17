@@ -141,17 +141,42 @@ class PuffeRL:
         self.uncompiled_policy = policy
         self.policy = policy
         if config['compile']:
-            self.policy = torch.compile(policy, mode=config['compile_mode'])
-            self.policy.forward_eval = torch.compile(policy, mode=config['compile_mode'])
+            # Keep the compiled object separate from the original nn.Module so
+            # state_dict() on self.uncompiled_policy doesn't chase a self-loop.
+            compiled_policy = torch.compile(policy, mode=config['compile_mode'])
+            compiled_eval   = torch.compile(
+                getattr(policy, 'forward_eval', policy.forward),
+                mode=config['compile_mode'],
+            )
+            # Install a tiny forwarder object rather than mutating `policy` itself.
+            class _CompiledWrapper(torch.nn.Module):
+                def __init__(self, base, compiled_call, compiled_eval):
+                    super().__init__()
+                    self._base = base
+                    self._compiled_call = compiled_call
+                    self._compiled_eval = compiled_eval
+                def forward(self, *a, **kw): return self._compiled_call(*a, **kw)
+                def forward_eval(self, *a, **kw): return self._compiled_eval(*a, **kw)
+                def parameters(self, recurse=True): return self._base.parameters(recurse)
+                def named_parameters(self, *a, **kw): return self._base.named_parameters(*a, **kw)
+                def state_dict(self, *a, **kw): return self._base.state_dict(*a, **kw)
+                def load_state_dict(self, *a, **kw): return self._base.load_state_dict(*a, **kw)
+                def train(self, mode=True): self._base.train(mode); return self
+                def eval(self): self._base.eval(); return self
+            self.policy = _CompiledWrapper(policy, compiled_policy, compiled_eval)
             pufferlib.pytorch.sample_logits = torch.compile(pufferlib.pytorch.sample_logits, mode=config['compile_mode'])
 
         # Optimizer
         if config['optimizer'] == 'adam':
+            # fused Adam: one kernel for all params (vs one-per-tensor foreach).
+            # Especially useful on tiny models where launch overhead dominates.
+            _fused_adam = bool(config.get('fused_adam', True)) and (device == 'cuda')
             optimizer = torch.optim.Adam(
                 self.policy.parameters(),
                 lr=config['learning_rate'],
                 betas=(config['adam_beta1'], config['adam_beta2']),
                 eps=config['adam_eps'],
+                fused=_fused_adam,
             )
         elif config['optimizer'] == 'muon':
             import heavyball
