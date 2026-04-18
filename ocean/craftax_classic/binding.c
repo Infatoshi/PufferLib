@@ -1,11 +1,11 @@
-#include "craftax.h"
+#include "craftax_classic.h"
 
 #define OBS_SIZE 1345
 #define NUM_ATNS 1
 #define ACT_SIZES {17}
 #define OBS_TENSOR_T FloatTensor
 
-#define Env Craftax
+#define Env CraftaxClassic
 #include "vecenv.h"
 
 void my_init(Env* env, Dict* kwargs) {

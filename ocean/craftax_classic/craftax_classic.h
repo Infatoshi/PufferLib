@@ -148,7 +148,7 @@ typedef struct Client {
 // ============================================================
 // Env struct
 // ============================================================
-typedef struct Craftax {
+typedef struct CraftaxClassic {
     Client* client;
     Log log;
 
@@ -217,17 +217,17 @@ typedef struct Craftax {
     // Scratch for per-step reward computation
     int8_t old_health;
     bool   old_achievements[NUM_ACHIEVEMENTS];
-} Craftax;
+} CraftaxClassic;
 
 // ============================================================
 // Map accessors + small helpers
 // ============================================================
-static inline int8_t map_get(const Craftax* s, int r, int c) {
+static inline int8_t map_get(const CraftaxClassic* s, int r, int c) {
     int idx = r * MAP_PACKED_ROW + (c >> 1);
     uint8_t b = s->map_packed[idx];
     return (c & 1) ? (int8_t)(b >> 4) : (int8_t)(b & 0x0F);
 }
-static inline void map_set(Craftax* s, int r, int c, int8_t v) {
+static inline void map_set(CraftaxClassic* s, int r, int c, int8_t v) {
     int idx = r * MAP_PACKED_ROW + (c >> 1);
     uint8_t b = s->map_packed[idx];
     if (c & 1) s->map_packed[idx] = (b & 0x0F) | ((v & 0x0F) << 4);
@@ -256,12 +256,12 @@ static inline void mb_set(uint64_t* bits, int r, int c)   { bits[r] |=  (1ULL <<
 static inline void mb_clear(uint64_t* bits, int r, int c) { bits[r] &= ~(1ULL << c); }
 static inline bool mb_get(const uint64_t* bits, int r, int c) { return (bits[r] >> c) & 1ULL; }
 
-static inline bool has_mob_at(const Craftax* s, int r, int c) {
+static inline bool has_mob_at(const CraftaxClassic* s, int r, int c) {
     if ((unsigned)r >= MAP_SIZE || (unsigned)c >= MAP_SIZE) return false;
     return ((s->mob_bits[r] >> c) & 1ULL) != 0;
 }
 
-static bool is_near_block(const Craftax* s, int8_t blk) {
+static bool is_near_block(const CraftaxClassic* s, int8_t blk) {
     int pr = s->player_r, pc = s->player_c;
     static const int dr8[8] = {0, 0, -1, 1, -1, -1, 1, 1};
     static const int dc8[8] = {-1, 1, 0, 0, -1, 1, -1, 1};
@@ -272,7 +272,7 @@ static bool is_near_block(const Craftax* s, int8_t blk) {
     return false;
 }
 
-static inline int get_damage(const Craftax* s) {
+static inline int get_damage(const CraftaxClassic* s) {
     if (s->inv[11] > 0) return 5;
     if (s->inv[10] > 0) return 3;
     if (s->inv[9]  > 0) return 2;
@@ -287,7 +287,7 @@ static inline float perlin_interp(float t) { return t*t*t*(t*(t*6.0f-15.0f)+10.0
 #if defined(__clang__) || defined(__GNUC__)
 __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl")))
 #endif
-static void generate_world(Craftax* s) {
+static void generate_world(CraftaxClassic* s) {
     // Reset maps and bitmaps
     for (int i = 0; i < MAP_PACKED_SIZE; i++)
         s->map_packed[i] = (uint8_t)(BLK_GRASS | (BLK_GRASS << 4));
@@ -456,7 +456,7 @@ static void generate_world(Craftax* s) {
 // ============================================================
 // Step sub-actions
 // ============================================================
-static void do_crafting(Craftax* s, int action) {
+static void do_crafting(CraftaxClassic* s, int action) {
     bool t = is_near_block(s, BLK_TABLE);
     bool f = is_near_block(s, BLK_FURNACE);
     if (action == ACT_MAKE_WOOD_PICK  && t && s->inv[0] >= 1) { s->inv[0]--; s->inv[6]++; s->achievements[ACH_MAKE_WOOD_PICK] = true; }
@@ -471,7 +471,7 @@ static void do_crafting(Craftax* s, int action) {
     }
 }
 
-static void do_action(Craftax* s) {
+static void do_action(CraftaxClassic* s) {
     int tr = s->player_r + DIR_DR[s->player_dir];
     int tc = s->player_c + DIR_DC[s->player_dir];
     if (!in_bounds(tr, tc)) return;
@@ -561,7 +561,7 @@ static void do_action(Craftax* s) {
     }
 }
 
-static void place_block(Craftax* s, int action) {
+static void place_block(CraftaxClassic* s, int action) {
     int tr = s->player_r + DIR_DR[s->player_dir];
     int tc = s->player_c + DIR_DC[s->player_dir];
     if (!in_bounds(tr, tc)) return;
@@ -588,7 +588,7 @@ static void place_block(Craftax* s, int action) {
     }
 }
 
-static void move_player(Craftax* s, int action) {
+static void move_player(CraftaxClassic* s, int action) {
     if (action < 1 || action > 4) return;
     int nr = s->player_r + DIR_DR[action];
     int nc = s->player_c + DIR_DC[action];
@@ -599,7 +599,7 @@ static void move_player(Craftax* s, int action) {
     s->player_r = (int16_t)nr; s->player_c = (int16_t)nc;
 }
 
-static bool can_move_mob(const Craftax* s, int r, int c) {
+static bool can_move_mob(const CraftaxClassic* s, int r, int c) {
     if (!in_bounds(r, c)) return false;
     int8_t blk = map_get(s, r, c);
     if (is_solid(blk)) return false;
@@ -609,7 +609,7 @@ static bool can_move_mob(const Craftax* s, int r, int c) {
     return true;
 }
 
-static void update_mobs(Craftax* s) {
+static void update_mobs(CraftaxClassic* s) {
     int pr = s->player_r, pc = s->player_c;
 
     for (int i = 0; i < MAX_ZOMBIES; i++) {
@@ -739,7 +739,7 @@ static void update_mobs(Craftax* s) {
     }
 }
 
-static bool try_spawn(Craftax* s, int min_d, int max_d, bool need_grass, bool need_path,
+static bool try_spawn(CraftaxClassic* s, int min_d, int max_d, bool need_grass, bool need_path,
                       int* or_, int* oc_) {
     int pr = s->player_r, pc = s->player_c;
     for (int att = 0; att < 20; att++) {
@@ -757,7 +757,7 @@ static bool try_spawn(Craftax* s, int min_d, int max_d, bool need_grass, bool ne
     return false;
 }
 
-static void spawn_mobs(Craftax* s) {
+static void spawn_mobs(CraftaxClassic* s) {
     int n_cows = 0, n_z = 0, n_sk = 0;
     for (int i = 0; i < MAX_COWS;      i++) n_cows += s->cow_mask[i];
     for (int i = 0; i < MAX_ZOMBIES;   i++) n_z    += s->zombie_mask[i];
@@ -798,7 +798,7 @@ static void spawn_mobs(Craftax* s) {
     }
 }
 
-static void update_plants(Craftax* s) {
+static void update_plants(CraftaxClassic* s) {
     for (int i = 0; i < MAX_PLANTS; i++) {
         if (!s->plant_mask[i]) continue;
         s->plant_age[i]++;
@@ -810,7 +810,7 @@ static void update_plants(Craftax* s) {
     }
 }
 
-static void update_intrinsics(Craftax* s, int action) {
+static void update_intrinsics(CraftaxClassic* s, int action) {
     if (action == ACT_SLEEP && s->energy < 9) s->is_sleeping = true;
     if (s->energy >= 9 && s->is_sleeping) {
         s->is_sleeping = false;
@@ -832,7 +832,7 @@ static void update_intrinsics(Craftax* s, int action) {
 // ============================================================
 // Observation builder (writes OBS_DIM floats into env->observations)
 // ============================================================
-static void compute_observations(Craftax* s) {
+static void compute_observations(CraftaxClassic* s) {
     float* obs = s->observations;
     int pr = s->player_r, pc = s->player_c;
     int idx = 0;
@@ -874,7 +874,7 @@ static void compute_observations(Craftax* s) {
 // ============================================================
 // Logging (stats accumulated into env->log; flushed at vec-level by PufferLib)
 // ============================================================
-static void add_log(Craftax* env) {
+static void add_log(CraftaxClassic* env) {
     int unlocked = 0;
     for (int i = 0; i < NUM_ACHIEVEMENTS; i++) {
         if (env->achievements[i]) {
@@ -892,7 +892,7 @@ static void add_log(Craftax* env) {
 // ============================================================
 // Public API: c_init / c_reset / c_step / c_close / c_render
 // ============================================================
-static void c_init(Craftax* env) {
+static void c_init(CraftaxClassic* env) {
     env->num_agents = 1;
     env->client = NULL;
     // env->rng was seeded by default my_vec_init to the env index; use it to
@@ -904,14 +904,14 @@ static void c_init(Craftax* env) {
     memset(&env->log, 0, sizeof(env->log));
 }
 
-static void c_reset(Craftax* env) {
+static void c_reset(CraftaxClassic* env) {
     env->episode_return_accum = 0.0f;
     env->episode_length_accum = 0;
     generate_world(env);
     compute_observations(env);
 }
 
-static void c_step(Craftax* env) {
+static void c_step(CraftaxClassic* env) {
     env->rewards[0] = 0.0f;
     env->terminals[0] = 0.0f;
 
@@ -965,16 +965,16 @@ static void c_step(Craftax* env) {
     }
 }
 
-static void c_close(Craftax* env) {
+static void c_close(CraftaxClassic* env) {
     (void)env;
 }
 
 // ============================================================
 // Minimal raylib rendering (optional; matches breakout pattern)
 // ============================================================
-static void c_render(Craftax* env) {
+static void c_render(CraftaxClassic* env) {
     if (!IsWindowReady()) {
-        InitWindow(MAP_SIZE * 10, MAP_SIZE * 10 + 60, "PufferLib Craftax");
+        InitWindow(MAP_SIZE * 10, MAP_SIZE * 10 + 60, "PufferLib Craftax-Classic");
         SetTargetFPS(30);
     }
     if (IsKeyDown(KEY_ESCAPE)) exit(0);
